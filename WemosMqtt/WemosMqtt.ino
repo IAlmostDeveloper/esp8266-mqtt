@@ -4,19 +4,20 @@
 #include <Adafruit_SSD1306.h>
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
+#include <ArduinoJson.h>
 
 #define PIN_RED 14
 #define PIN_GREEN 13
 #define PIN_BLUE 12
 
-const char *ssid = "xxxxxxx"; // Имя роутера
-const char *pass = "xxxxxxx"; // Пароль роутера
+const char *ssid = "xxxxxxxxx"; // Имя роутера
+const char *pass = "xxxxxxxxx"; // Пароль роутера
 
-const char *mqtt_server = "xxxxxxxxxxxxx"; // Имя сервера MQTT
+const char *mqtt_server = "xxxxxxxxx"; // Имя сервера MQTT
 const int mqtt_port = 1883; // Порт для подключения к серверу MQTT
-const char *mqtt_user = "xxxxxxxx"; // Логи для подключения к серверу MQTT
-const char *mqtt_pass = "xxxxxxxx"; // Пароль для подключения к серверу MQTT
-const char* mqtt_topics[] = {"esp", "led", "pwmred", "pwmgreen", "pwmblue"};
+const char *mqtt_user = "xxxxxxxxx"; // Логи для подключения к серверу MQTT
+const char *mqtt_pass = "xxxxxxxxx"; // Пароль для подключения к серверу MQTT
+const char* mqtt_topics[] = {"esp", "led", "pwmrgb"};
 
 #define OLED_RESET 1
 Adafruit_SSD1306 display(OLED_RESET);
@@ -28,16 +29,6 @@ void setDisplay(){
   display.setTextSize(1);
   display.setTextColor(WHITE);
   display.clearDisplay();
-}
-
-int getLedValue(byte* payload,  unsigned int length){
-  int result = 0;
-  int multiplier = 1;
-  for(int i=length-1;i>=0;i--){
-    result += ((char)payload[i] - '0') * multiplier;
-    multiplier *= 10;
-  }
-  return result;
 }
 
 void printMessage(byte* payload, unsigned int length){
@@ -53,12 +44,20 @@ void toggleLed(byte* payload){
     digitalWrite(LED_BUILTIN, (int)((char)payload[0] - '0'));
 }
 
-void pwmLed(int ledValue, char* topic){
-  byte pin = strcmp(topic, "pwmred")==0 ? PIN_RED 
-            : strcmp(topic, "pwmgreen")==0 ? PIN_GREEN 
-            : strcmp(topic, "pwmblue")==0 ? PIN_BLUE 
-            : 0;
-  analogWrite(pin, ledValue);
+void setRgbLed(byte* payload){
+ const size_t capacity = JSON_OBJECT_SIZE(3) + JSON_ARRAY_SIZE(2) + 60;
+    DynamicJsonBuffer jsonBuffer(capacity);
+    JsonObject& root = jsonBuffer.parseObject(payload);
+    if (!root.success()) {
+      Serial.println(F("Parsing failed!"));
+      return;
+    }
+    int r = root["R"].as<int>();
+    int g = root["G"].as<int>();
+    int b = root["B"].as<int>();
+    analogWrite(PIN_RED, 1023 - r);
+    analogWrite(PIN_GREEN, 1023- g);
+    analogWrite(PIN_BLUE, 1023 - b);
 }
 
 void callback(char* topic, byte* payload, unsigned int length) {
@@ -66,12 +65,12 @@ void callback(char* topic, byte* payload, unsigned int length) {
   Serial.print(topic);
   Serial.println("]");
   setDisplay();
+  if(strcmp(topic, "pwmrgb")==0)
+    setRgbLed(payload);
   if(strcmp(topic, "esp")==0)
     printMessage(payload, length);
   else if(strcmp(topic, "led")==0)
     toggleLed(payload);
-  else 
-    pwmLed(getLedValue(payload, length), topic);
   Serial.println();
 }
 
@@ -114,13 +113,13 @@ void setup() {
   digitalWrite(PIN_RED,1);
   digitalWrite(PIN_GREEN,1);
   digitalWrite(PIN_BLUE,1);
-  
-  display.begin(SSD1306_SWITCHCAPVCC, 0x3D);
-  display.clearDisplay();
+  digitalWrite(LED_BUILTIN,1);
   
   Serial.begin(115200);
   delay(10);
   Serial.println("\n");
+  display.begin(SSD1306_SWITCHCAPVCC, 0x3D);
+  display.clearDisplay();
 }
 
 void loop() {
