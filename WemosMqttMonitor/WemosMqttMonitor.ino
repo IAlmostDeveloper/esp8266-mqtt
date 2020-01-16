@@ -3,12 +3,11 @@
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
+#include "DHT.h"
 
 unsigned long last_sending_time = 0;
 
-#define TOUCH_SENSOR_PIN 13
-#define OBSTACLE_SENSOR_PIN 14
-#define LIGHTNESS_SENSOR_PIN 12
+#define TEMPERATURE_SENSOR_PIN 14
 
 const char *ssid = "xxxxxxxxx";
 const char *pass = "xxxxxxxxx";
@@ -20,8 +19,10 @@ const char *mqtt_pass = "xxxxxxxxx";
 const char *mqtt_send_topic = "xxxxxxxx";
 
 WiFiClient wclient; 
+DHT dht(TEMPERATURE_SENSOR_PIN, DHT11);
 
 void callback(char* topic, byte* payload, unsigned int length);
+void sendDataByMqtt();
 
 PubSubClient client(mqtt_server, mqtt_port, callback, wclient);
 
@@ -39,16 +40,13 @@ void sendDataByMqtt(){
   JsonObject& obj = jsonBuffer.createObject();
   String data = "";
   byte results[1024];
-  obj["touch"] = digitalRead(TOUCH_SENSOR_PIN);
-  obj["obstacle"] = digitalRead(OBSTACLE_SENSOR_PIN);
-  obj["lightness"] = digitalRead(LIGHTNESS_SENSOR_PIN);
+  obj["temperature"] = dht.readTemperature();
+  obj["humidity"] = dht.readHumidity();
   obj.printTo(data);
   for(int i=0;i<data.length();i++){
     results[i] = (byte)data[i];
   }
   client.publish(mqtt_send_topic, results, data.length());
-//  Serial.println(results, data.length());
-//  Serial.println(strlen(results));
 Serial.println(data);
   Serial.println(data.length());
 }
@@ -79,10 +77,8 @@ void connectToMQTT(){
 
 void setup() {
   pinMode(LED_BUILTIN, OUTPUT);
-  pinMode(TOUCH_SENSOR_PIN, INPUT);
-  pinMode(OBSTACLE_SENSOR_PIN, INPUT);
-  pinMode(LIGHTNESS_SENSOR_PIN, INPUT);
   digitalWrite(LED_BUILTIN, 1);
+  dht.begin();
   Serial.begin(115200);
   delay(10);
 }
